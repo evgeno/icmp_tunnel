@@ -24,16 +24,17 @@ class Server():
         while run:
             packet, addr = self.sock.recvfrom(1024)
             if addr[0] == self.src_ip:
-                icmp_data = ICMP.parse_packet(packet)
-                if SIGNAL_SUBSTRING in icmp_data:
+                icmp_tuple = ICMP.parse_packet(packet)
+                self.icmp_id = icmp_tuple[1]
+                if SIGNAL_SUBSTRING in icmp_tuple[0]:
                     run = False
-                data += icmp_data
+                data += icmp_tuple[0]
         result_string = data.replace(SIGNAL_SUBSTRING, b"")
         return result_string
     
     def send(self, data:bytes):
-        packet_id = random.randint(0,65535)
-        packet = ICMP.create_packet(packet_id, data)
+        packet_id = random.randint(0,65535) #due to nat forwarding the server packet uses the client packet's icmp id
+        packet = ICMP.create_packet(self.icmp_id, data, "server")
 
         while packet:
             sent = self.sock.sendto(packet, (self.src_ip, 1))
@@ -61,7 +62,7 @@ class Client():
 
     def send(self, data:bytes):
         packet_id = random.randint(0,65535)
-        packet = ICMP.create_packet(packet_id, data)
+        packet = ICMP.create_packet(packet_id, data, "client")
 
         while packet:
             sent = self.sock.sendto(packet, (self.dst_ip, 1))
@@ -75,11 +76,11 @@ class Client():
         while run:
             packet, addr = self.sock.recvfrom(1024)
             if addr[0] == self.dst_ip:
-                icmp_data = ICMP.parse_packet(packet)
-                if SIGNAL_SUBSTRING in icmp_data:
+                icmp_tuple = ICMP.parse_packet(packet)
+                if SIGNAL_SUBSTRING in icmp_tuple[0]:
                     run = False
-                data += icmp_data
-                print(f"[+] Received data from {addr[0]}: {icmp_data}")
+                data += icmp_tuple[0]
+                print(f"[+] Received data from {addr[0]}: {icmp_tuple[0]}")
         result_string = data.replace(SIGNAL_SUBSTRING, b"")
         return result_string
 
@@ -115,8 +116,11 @@ class ICMP():
         return answer
     
     @staticmethod
-    def create_packet(id, data:bytes):
-        ICMP_ECHO_REQUEST=0
+    def create_packet(id, data:bytes, sender_type:str):
+        if sender_type == "client":
+            ICMP_ECHO_REQUEST=8
+        elif sender_type == "server":
+            ICMP_ECHO_REQUEST=0
         data = data + SIGNAL_SUBSTRING
         header = struct.pack('bbHHh', ICMP_ECHO_REQUEST, 0, 0, id, 1)
         my_checksum = ICMP.checksum(header + data)
@@ -128,7 +132,7 @@ class ICMP():
         icmp_header = packet[20:28]
         icmp_type, icmp_code, icmp_checksum, icmp_id, icmp_seq = struct.unpack("bbHHh", icmp_header)
         icmp_data = packet[28:]#[16:32]
-        return icmp_data
+        return (icmp_data, icmp_id)
 
 class Payload():
     def __init__(self, payload, output_file):
